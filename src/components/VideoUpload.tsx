@@ -1,8 +1,12 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useState, useRef } from 'react';
 import { useDropzone } from 'react-dropzone';
-import { Upload, FileVideo, AlertCircle, Sparkles, FileText } from 'lucide-react';
+import {
+  Upload, FileVideo, AlertCircle, Sparkles, FileText,
+  Edit3, Check, RotateCcw, Info, ChevronDown, ChevronUp,
+} from 'lucide-react';
 import { useGameStore } from '../store/gameStore';
 import { processVideo, parsePgnInput } from '../engine/videoProcessor';
+import type { VideoProcessingResult } from '../engine/videoProcessor';
 import { analyzeGame } from '../engine/analyzer';
 import { Chess } from 'chess.js';
 
@@ -15,18 +19,24 @@ export default function VideoUpload({ onAnalysisComplete }: VideoUploadProps) {
   const [pgnInput, setPgnInput] = useState('');
   const [mode, setMode] = useState<'video' | 'pgn'>('video');
 
+  // Review step state
+  const [extractionResult, setExtractionResult] = useState<VideoProcessingResult | null>(null);
+  const [reviewPgn, setReviewPgn] = useState('');
+  const [isEditing, setIsEditing] = useState(false);
+  const [pgnError, setPgnError] = useState('');
+  const [showDetails, setShowDetails] = useState(false);
+  const videoPreviewRef = useRef<HTMLVideoElement>(null);
+
   const runAnalysis = useCallback(async (pgn: string) => {
     store.setStatus('analyzing');
     store.setProgress(0);
 
     try {
-      // Use a simulated evaluation for browser-based analysis
       const simulatedEvaluate = async (fen: string) => {
         const chess = new Chess(fen);
         const legalMoves = chess.moves({ verbose: true });
         await new Promise(r => setTimeout(r, 15));
 
-        // Simple material-based evaluation
         const pieceValues: Record<string, number> = { p: 1, n: 3, b: 3.2, r: 5, q: 9, k: 0 };
         let score = 0;
         const board = chess.board();
@@ -38,16 +48,12 @@ export default function VideoUpload({ onAnalysisComplete }: VideoUploadProps) {
             }
           }
         }
-
-        // Add positional noise for realism
         score += (Math.random() - 0.5) * 0.6;
-
         const bestMove = legalMoves.length > 0 ? legalMoves[0].lan : '';
         return { score: Math.round(score * 100) / 100, bestMove };
       };
 
       const analysis = await analyzeGame(pgn, (p) => store.setProgress(p), simulatedEvaluate);
-
       store.setAnalysis(analysis);
       store.setStatus('complete');
       onAnalysisComplete();
@@ -56,9 +62,16 @@ export default function VideoUpload({ onAnalysisComplete }: VideoUploadProps) {
     }
   }, [store, onAnalysisComplete]);
 
+  // Video upload → extraction → review
   const onDrop = useCallback(async (acceptedFiles: File[]) => {
     const file = acceptedFiles[0];
     if (!file) return;
+
+    // Reset any previous state
+    setExtractionResult(null);
+    setReviewPgn('');
+    setIsEditing(false);
+    setPgnError('');
 
     store.setVideoFile(file);
     store.setStatus('uploading');
@@ -67,7 +80,7 @@ export default function VideoUpload({ onAnalysisComplete }: VideoUploadProps) {
     // Simulate upload progress
     for (let i = 0; i <= 100; i += 5) {
       store.setProgress(i);
-      await new Promise(r => setTimeout(r, 50));
+      await new Promise(r => setTimeout(r, 30));
     }
 
     store.setStatus('extracting');
@@ -78,16 +91,46 @@ export default function VideoUpload({ onAnalysisComplete }: VideoUploadProps) {
         store.setProgress(progress);
       });
 
+      // Go to review step instead of directly analyzing
+      setExtractionResult(result);
+      setReviewPgn(result.pgn);
       store.setPgn(result.pgn);
-      await runAnalysis(result.pgn);
+      store.setStatus('reviewing');
     } catch (err) {
       store.setError(`Processing failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
     }
-  }, [store, runAnalysis]);
+  }, [store]);
 
+  // Validate PGN during review editing
+  const validatePgn = (pgn: string): { valid: boolean; moveCount: number; error?: string } => {
+    try {
+      const chess = new Chess();
+      chess.loadPgn(pgn);
+      const moves = chess.history();
+      if (moves.length === 0) {
+        return { valid: false, moveCount: 0, error: 'No valid moves found in PGN' };
+      }
+      return { valid: true, moveCount: moves.length };
+    } catch (err) {
+      return { valid: false, moveCount: 0, error: err instanceof Error ? err.message : 'Invalid PGN format' };
+    }
+  };
+
+  // Confirm reviewed PGN and run analysis
+  const handleConfirmAndAnalyze = async () => {
+    const validation = validatePgn(reviewPgn);
+    if (!validation.valid) {
+      setPgnError(validation.error || 'Invalid PGN');
+      return;
+    }
+    setPgnError('');
+    store.setPgn(reviewPgn);
+    await runAnalysis(reviewPgn);
+  };
+
+  // Direct PGN submit (paste mode)
   const handlePgnSubmit = async () => {
     if (!pgnInput.trim()) return;
-
     const cleaned = parsePgnInput(pgnInput);
     try {
       const chess = new Chess();
@@ -103,6 +146,16 @@ export default function VideoUpload({ onAnalysisComplete }: VideoUploadProps) {
     }
   };
 
+  // Reset everything to start over
+  const handleStartOver = () => {
+    setExtractionResult(null);
+    setReviewPgn('');
+    setIsEditing(false);
+    setPgnError('');
+    store.setStatus('idle');
+    store.setProgress(0);
+  };
+
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
     accept: { 'video/*': ['.mp4', '.mov', '.avi', '.mkv', '.webm'] },
@@ -111,7 +164,177 @@ export default function VideoUpload({ onAnalysisComplete }: VideoUploadProps) {
   });
 
   const isProcessing = ['uploading', 'extracting', 'analyzing', 'summarizing'].includes(store.status);
+  const isReviewing = store.status === 'reviewing';
 
+  // --- REVIEW STEP UI ---
+  if (isReviewing && extractionResult) {
+    const validation = validatePgn(reviewPgn);
+    const formatDuration = (s: number) => {
+      const m = Math.floor(s / 60);
+      const sec = Math.round(s % 60);
+      return m > 0 ? `${m}m ${sec}s` : `${sec}s`;
+    };
+
+    return (
+      <div className="max-w-3xl mx-auto space-y-4">
+        {/* Header */}
+        <div className="text-center">
+          <div className="w-12 h-12 mx-auto rounded-full bg-yellow-500/20 flex items-center justify-center mb-3">
+            <Edit3 className="w-6 h-6 text-yellow-400" />
+          </div>
+          <h2 className="text-xl font-bold text-white">Review Extracted Moves</h2>
+          <p className="text-sm text-gray-400 mt-1">
+            Verify the moves below are correct before analysis. Edit if needed.
+          </p>
+        </div>
+
+        {/* Demo mode banner */}
+        {extractionResult.isDemoMode && (
+          <div className="p-3 bg-blue-500/10 border border-blue-500/30 rounded-xl flex items-start gap-3">
+            <Info className="w-4 h-4 text-blue-400 mt-0.5 shrink-0" />
+            <div className="text-xs text-blue-300/80">
+              <span className="font-semibold text-blue-300">Demo Mode:</span> Full computer vision detection requires a backend ML pipeline.
+              This demo matched your video ({formatDuration(extractionResult.videoDuration)}) to a sample game with ~{extractionResult.estimatedMoves} moves.
+              You can edit the PGN below to enter your actual game moves.
+            </div>
+          </div>
+        )}
+
+        {/* Video preview + extraction info */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {/* Video thumbnail */}
+          {store.videoUrl && (
+            <div className="bg-white/5 rounded-xl border border-white/10 overflow-hidden">
+              <video
+                ref={videoPreviewRef}
+                src={store.videoUrl}
+                className="w-full h-40 object-cover"
+                muted
+              />
+              <div className="p-3">
+                <p className="text-xs text-gray-400 truncate">{store.videoFile?.name}</p>
+                <p className="text-xs text-gray-500">
+                  Duration: {formatDuration(extractionResult.videoDuration)} &middot;
+                  Size: {((store.videoFile?.size || 0) / 1024 / 1024).toFixed(1)} MB
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Extraction summary */}
+          <div className="bg-white/5 rounded-xl border border-white/10 p-4 flex flex-col justify-between">
+            <div>
+              <h3 className="text-sm font-semibold text-gray-300 mb-2">Extraction Result</h3>
+              <div className="space-y-1.5 text-xs">
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Matched game:</span>
+                  <span className="text-white font-medium">{extractionResult.gameName}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Confidence:</span>
+                  <span className={`font-medium ${extractionResult.confidence > 0.8 ? 'text-green-400' : 'text-yellow-400'}`}>
+                    {(extractionResult.confidence * 100).toFixed(0)}%
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Detected moves:</span>
+                  <span className="text-white font-mono">{validation.moveCount} half-moves</span>
+                </div>
+              </div>
+            </div>
+
+            <button
+              onClick={() => setShowDetails(!showDetails)}
+              className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-300 mt-3 transition-colors"
+            >
+              {showDetails ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+              {showDetails ? 'Hide' : 'Show'} detection details
+            </button>
+
+            {showDetails && (
+              <div className="mt-2 pt-2 border-t border-white/10 text-[10px] text-gray-500 space-y-0.5">
+                <p>Board detection: Simulated</p>
+                <p>Perspective calibration: Auto</p>
+                <p>Frame analysis: {Math.round(extractionResult.videoDuration * 30)} frames @ 30fps</p>
+                <p>Move tracking: Pattern-based</p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* PGN Editor */}
+        <div className="bg-white/5 rounded-xl border border-white/10 p-4">
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-sm font-semibold text-gray-300">
+              {isEditing ? 'Edit PGN' : 'Detected PGN'}
+            </h3>
+            <button
+              onClick={() => setIsEditing(!isEditing)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                isEditing
+                  ? 'bg-yellow-500/20 text-yellow-400'
+                  : 'bg-white/5 text-gray-400 hover:text-white hover:bg-white/10'
+              }`}
+            >
+              <Edit3 className="w-3 h-3" />
+              {isEditing ? 'Editing' : 'Edit Moves'}
+            </button>
+          </div>
+
+          {isEditing ? (
+            <textarea
+              value={reviewPgn}
+              onChange={(e) => {
+                setReviewPgn(e.target.value);
+                setPgnError('');
+              }}
+              className="w-full h-32 bg-black/30 border border-yellow-500/30 rounded-lg p-3 text-gray-200 font-mono text-sm focus:border-yellow-500 focus:outline-none resize-none"
+              placeholder="Enter PGN moves here, e.g.: 1. e4 e5 2. Nf3 Nc6 ..."
+            />
+          ) : (
+            <div className="bg-black/20 rounded-lg p-3 font-mono text-sm text-gray-300 leading-relaxed min-h-[4rem]">
+              {reviewPgn}
+            </div>
+          )}
+
+          {pgnError && (
+            <div className="mt-2 flex items-center gap-2 text-xs text-red-400">
+              <AlertCircle className="w-3 h-3" />
+              {pgnError}
+            </div>
+          )}
+
+          {isEditing && (
+            <p className="mt-2 text-[10px] text-gray-500">
+              Tip: Enter moves in standard algebraic notation (e.g., 1. e4 e5 2. Nf3 Nc6).
+              The notation will be validated before analysis.
+            </p>
+          )}
+        </div>
+
+        {/* Action buttons */}
+        <div className="flex gap-3">
+          <button
+            onClick={handleStartOver}
+            className="flex items-center gap-2 px-4 py-3 bg-white/5 hover:bg-white/10 rounded-xl transition-colors text-sm text-gray-400 hover:text-white"
+          >
+            <RotateCcw className="w-4 h-4" />
+            Start Over
+          </button>
+          <button
+            onClick={handleConfirmAndAnalyze}
+            disabled={!validation.valid && !isEditing}
+            className="flex-1 flex items-center justify-center gap-2 py-3 px-6 bg-gradient-to-r from-accent to-accent-light text-white font-semibold rounded-xl hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Check className="w-4 h-4" />
+            Confirm & Analyze ({validation.moveCount} moves)
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // --- NORMAL UPLOAD/PROCESSING UI ---
   return (
     <div className="max-w-3xl mx-auto">
       {/* Mode Tabs */}
@@ -190,14 +413,14 @@ export default function VideoUpload({ onAnalysisComplete }: VideoUploadProps) {
                   Drag & drop or click to browse. MP4, MOV, AVI, MKV up to 500MB
                 </p>
               </div>
-              <div className="flex items-center justify-center gap-4 text-xs text-gray-500">
+              <div className="flex items-center justify-center gap-3 text-xs text-gray-500 flex-wrap">
                 <span className="flex items-center gap-1">
                   <FileVideo className="w-3 h-3" /> Video input
                 </span>
                 <span>→</span>
                 <span>CV Detection</span>
                 <span>→</span>
-                <span>PGN Output</span>
+                <span className="text-yellow-500 font-medium">Review & Edit</span>
                 <span>→</span>
                 <span>Engine Analysis</span>
               </div>
@@ -248,10 +471,10 @@ export default function VideoUpload({ onAnalysisComplete }: VideoUploadProps) {
         <h3 className="text-sm font-semibold text-gray-300 mb-3">Try a famous game:</h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           {[
-            { name: 'Immortal Game (1851)', pgn: '1. e4 e5 2. f4 exf4 3. Bc4 Qh4+ 4. Kf1 b5 5. Bxb5 Nf6 6. Nf3 Qh6 7. d3 Nh5 8. Nh4 Qg5 9. Nf5 c6 10. g4 Nf6 11. Rg1 cxb5 12. h4 Qg6 13. h5 Qg5 14. Qf3 Ng8 15. Bxf4 Qf6 16. Nc3 Bc5 17. Nd5 Qxb2 18. Bd6 Bxg1 19. e5 Qxa1+ 20. Ke2 Na6 21. Nxg7+ Kd8 22. Qf6+ Nxf6 23. Be7#' },
-            { name: 'Opera Game (1858)', pgn: '1. e4 e5 2. Nf3 d6 3. d4 Bg4 4. dxe5 Bxf3 5. Qxf3 dxe5 6. Bc4 Nf6 7. Qb3 Qe7 8. Nc3 c6 9. Bg5 b5 10. Nxb5 cxb5 11. Bxb5+ Nbd7 12. O-O-O Rd8 13. Rxd7 Rxd7 14. Rd1 Qe6 15. Bxd7+ Nxd7 16. Qb8+ Nxb8 17. Rd8#' },
-            { name: 'Fischer vs Byrne (1956)', pgn: '1. Nf3 Nf6 2. c4 g6 3. Nc3 Bg7 4. d4 O-O 5. Bf4 d5 6. Qb3 dxc4 7. Qxc4 c6 8. e4 Nbd7 9. Rd1 Nb6 10. Qc5 Bg4 11. Bg5 Na4 12. Qa3 Nxc3 13. bxc3 Nxe4 14. Bxe7 Qb6 15. Bc4 Nxc3 16. Bc5 Rfe8+ 17. Kf1 Be6 18. Bxb6 Bxc4+ 19. Kg1 Ne2+ 20. Kf1 Nxd4+ 21. Kg1 Ne2+ 22. Kf1 Nc3+ 23. Kg1 axb6 24. Qb4 Ra4 25. Qxb6 Nxd1 26. h3 Rxa2 27. Kh2 Nxf2 28. Re1 Rxe1 29. Qd8+ Bf8 30. Nxe1 Bd5 31. Nf3 Ne4 32. Qb8 b5 33. h4 h5 34. Ne5 Kg7 35. Kg1 Bc5+ 36. Kf1 Ng3+ 37. Ke1 Bb4+ 38. Kd1 Bb3+ 39. Kc1 Ne2+ 40. Kb1 Nc3+ 41. Kc1 Rc2#' },
-            { name: 'Italian Game Demo', pgn: '1. e4 e5 2. Nf3 Nc6 3. Bc4 Bc5 4. c3 Nf6 5. d4 exd4 6. cxd4 Bb4+ 7. Bd2 Bxd2+ 8. Nbxd2 d5 9. exd5 Nxd5 10. Qb3 Na5 11. Qa4+ Nc6 12. Qb3 Na5 13. Qa4+ Nc6' },
+            { name: "Scholar's Mate (4 moves)", pgn: '1. e4 e5 2. Bc4 Nc6 3. Qh5 Nf6 4. Qxf7#' },
+            { name: 'Legal Trap (7 moves)', pgn: '1. e4 e5 2. Nf3 d6 3. Bc4 Bg4 4. Nc3 g6 5. Nxe5 Bxd1 6. Bxf7+ Ke7 7. Nd5#' },
+            { name: 'Opera Game (17 moves)', pgn: '1. e4 e5 2. Nf3 d6 3. d4 Bg4 4. dxe5 Bxf3 5. Qxf3 dxe5 6. Bc4 Nf6 7. Qb3 Qe7 8. Nc3 c6 9. Bg5 b5 10. Nxb5 cxb5 11. Bxb5+ Nbd7 12. O-O-O Rd8 13. Rxd7 Rxd7 14. Rd1 Qe6 15. Bxd7+ Nxd7 16. Qb8+ Nxb8 17. Rd8#' },
+            { name: 'Immortal Game (23 moves)', pgn: '1. e4 e5 2. f4 exf4 3. Bc4 Qh4+ 4. Kf1 b5 5. Bxb5 Nf6 6. Nf3 Qh6 7. d3 Nh5 8. Nh4 Qg5 9. Nf5 c6 10. g4 Nf6 11. Rg1 cxb5 12. h4 Qg6 13. h5 Qg5 14. Qf3 Ng8 15. Bxf4 Qf6 16. Nc3 Bc5 17. Nd5 Qxb2 18. Bd6 Bxg1 19. e5 Qxa1+ 20. Ke2 Na6 21. Nxg7+ Kd8 22. Qf6+ Nxf6 23. Be7#' },
           ].map((game) => (
             <button
               key={game.name}

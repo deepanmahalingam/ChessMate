@@ -55,7 +55,7 @@ export interface GameSummary {
   advancedSummary: string;
 }
 
-export type ProcessingStatus = 'idle' | 'uploading' | 'extracting' | 'analyzing' | 'summarizing' | 'complete' | 'error';
+export type ProcessingStatus = 'idle' | 'uploading' | 'extracting' | 'reviewing' | 'analyzing' | 'summarizing' | 'complete' | 'error';
 
 export interface GameState {
   id: string;
