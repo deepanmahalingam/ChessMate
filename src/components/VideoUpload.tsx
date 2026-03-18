@@ -1,7 +1,7 @@
 import { useCallback, useState, useRef } from 'react';
 import { useDropzone } from 'react-dropzone';
 import {
-  Upload, FileVideo, AlertCircle, Sparkles, FileText,
+  Upload, FileVideo, AlertCircle, Sparkles,
   Edit3, Check, RotateCcw, Info, ChevronDown, ChevronUp,
 } from 'lucide-react';
 import { useGameStore } from '../store/gameStore';
@@ -17,7 +17,6 @@ interface VideoUploadProps {
 export default function VideoUpload({ onAnalysisComplete }: VideoUploadProps) {
   const store = useGameStore();
   const [pgnInput, setPgnInput] = useState('');
-  const [mode, setMode] = useState<'video' | 'pgn'>('video');
 
   // Review step state
   const [extractionResult, setExtractionResult] = useState<VideoProcessingResult | null>(null);
@@ -337,123 +336,99 @@ export default function VideoUpload({ onAnalysisComplete }: VideoUploadProps) {
   // --- NORMAL UPLOAD/PROCESSING UI ---
   return (
     <div className="max-w-3xl mx-auto">
-      {/* Mode Tabs */}
-      <div className="flex gap-2 mb-8 justify-center">
-        <button
-          onClick={() => setMode('video')}
-          className={`flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all ${
-            mode === 'video'
-              ? 'bg-accent text-white shadow-lg shadow-accent/25'
-              : 'bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white'
-          }`}
-        >
-          <FileVideo className="w-4 h-4" />
-          Upload Video
-        </button>
-        <button
-          onClick={() => setMode('pgn')}
-          className={`flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all ${
-            mode === 'pgn'
-              ? 'bg-accent text-white shadow-lg shadow-accent/25'
-              : 'bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white'
-          }`}
-        >
-          <FileText className="w-4 h-4" />
-          Paste PGN
-        </button>
-      </div>
-
-      {mode === 'video' ? (
-        <div
-          {...getRootProps()}
-          className={`border-2 border-dashed rounded-2xl p-12 text-center cursor-pointer transition-all duration-300 ${
-            isDragActive
-              ? 'border-accent bg-accent/10 scale-[1.02]'
-              : isProcessing
-              ? 'border-gray-600 bg-white/5 cursor-wait'
-              : 'border-gray-600 hover:border-accent/50 hover:bg-white/5'
-          }`}
-        >
-          <input {...getInputProps()} disabled={isProcessing} />
-
-          {isProcessing ? (
-            <div className="space-y-6">
-              <div className="w-16 h-16 mx-auto rounded-full bg-accent/20 flex items-center justify-center">
-                <Sparkles className="w-8 h-8 text-accent animate-pulse" />
-              </div>
-              <div>
-                <p className="text-lg font-semibold text-white mb-1">
-                  {store.status === 'uploading' && 'Uploading video...'}
-                  {store.status === 'extracting' && 'Extracting moves with CV...'}
-                  {store.status === 'analyzing' && 'Analyzing with engine...'}
-                  {store.status === 'summarizing' && 'Generating summary...'}
-                </p>
-                <p className="text-sm text-gray-400">This may take a moment</p>
-              </div>
-              <div className="max-w-xs mx-auto">
-                <div className="h-2 bg-gray-700 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-gradient-to-r from-accent to-accent-light rounded-full transition-all duration-300"
-                    style={{ width: `${store.progress}%` }}
-                  />
-                </div>
-                <p className="text-xs text-gray-500 mt-2">{Math.round(store.progress)}%</p>
-              </div>
+      {/* Processing state */}
+      {isProcessing ? (
+        <div className="border-2 border-gray-600 bg-white/5 rounded-2xl p-12 text-center">
+          <div className="space-y-6">
+            <div className="w-16 h-16 mx-auto rounded-full bg-accent/20 flex items-center justify-center">
+              <Sparkles className="w-8 h-8 text-accent animate-pulse" />
             </div>
-          ) : (
-            <div className="space-y-4">
-              <div className="w-16 h-16 mx-auto rounded-full bg-white/5 flex items-center justify-center">
-                <Upload className="w-8 h-8 text-gray-400" />
-              </div>
-              <div>
-                <p className="text-lg font-semibold text-white">
-                  {isDragActive ? 'Drop your video here' : 'Upload a chess game video'}
-                </p>
-                <p className="text-sm text-gray-400 mt-1">
-                  Drag & drop or click to browse. MP4, MOV, AVI, MKV up to 500MB
-                </p>
-              </div>
-              <div className="flex items-center justify-center gap-3 text-xs text-gray-500 flex-wrap">
-                <span className="flex items-center gap-1">
-                  <FileVideo className="w-3 h-3" /> Video input
-                </span>
-                <span>→</span>
-                <span>CV Detection</span>
-                <span>→</span>
-                <span className="text-yellow-500 font-medium">Review & Edit</span>
-                <span>→</span>
-                <span>Engine Analysis</span>
-              </div>
+            <div>
+              <p className="text-lg font-semibold text-white mb-1">
+                {store.status === 'uploading' && 'Uploading video...'}
+                {store.status === 'extracting' && 'Extracting moves with CV...'}
+                {store.status === 'analyzing' && 'Analyzing with engine...'}
+                {store.status === 'summarizing' && 'Generating summary...'}
+              </p>
+              <p className="text-sm text-gray-400">This may take a moment</p>
             </div>
-          )}
+            <div className="max-w-xs mx-auto">
+              <div className="h-2 bg-gray-700 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-gradient-to-r from-accent to-accent-light rounded-full transition-all duration-300"
+                  style={{ width: `${store.progress}%` }}
+                />
+              </div>
+              <p className="text-xs text-gray-500 mt-2">{Math.round(store.progress)}%</p>
+            </div>
+          </div>
         </div>
       ) : (
-        <div className="space-y-4">
-          <textarea
-            value={pgnInput}
-            onChange={(e) => setPgnInput(e.target.value)}
-            placeholder={`Paste PGN notation here...\n\nExample:\n1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 4. Ba4 Nf6 5. O-O Be7...`}
-            className="w-full h-48 bg-white/5 border border-gray-600 rounded-xl p-4 text-gray-200 placeholder-gray-500 focus:border-accent focus:outline-none resize-none font-mono text-sm"
-            disabled={isProcessing}
-          />
-          <button
-            onClick={handlePgnSubmit}
-            disabled={isProcessing || !pgnInput.trim()}
-            className="w-full py-3 px-6 bg-gradient-to-r from-accent to-accent-light text-white font-semibold rounded-xl hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-          >
-            {isProcessing ? (
-              <>
-                <Sparkles className="w-4 h-4 animate-pulse" />
-                Analyzing... {Math.round(store.progress)}%
-              </>
-            ) : (
-              <>
-                <Sparkles className="w-4 h-4" />
-                Analyze Game
-              </>
-            )}
-          </button>
-        </div>
+        <>
+          {/* === OPTION 1: Upload Video === */}
+          <div className="mb-6">
+            <div
+              {...getRootProps()}
+              className={`rounded-2xl p-8 text-center cursor-pointer transition-all duration-300 ${
+                isDragActive
+                  ? 'border-2 border-accent bg-accent/10 scale-[1.02]'
+                  : 'bg-white/5 border border-white/10 hover:border-accent/40 hover:bg-white/[0.08]'
+              }`}
+            >
+              <input {...getInputProps()} />
+
+              <div className="flex flex-col items-center gap-4">
+                <div className="w-14 h-14 rounded-full bg-accent/15 flex items-center justify-center">
+                  <FileVideo className="w-7 h-7 text-accent" />
+                </div>
+                <div>
+                  <p className="text-lg font-semibold text-white">
+                    {isDragActive ? 'Drop your video here' : 'Upload a Chess Game Video'}
+                  </p>
+                  <p className="text-sm text-gray-400 mt-1">
+                    Drag & drop a video file here, or click the button below
+                  </p>
+                </div>
+                {/* Prominent browse button */}
+                <button
+                  type="button"
+                  className="px-8 py-3 bg-gradient-to-r from-accent to-accent-light text-white font-semibold rounded-xl hover:opacity-90 transition-all shadow-lg shadow-accent/25 flex items-center gap-2"
+                >
+                  <Upload className="w-5 h-5" />
+                  Browse Files
+                </button>
+                <p className="text-xs text-gray-500">
+                  Supports MP4, MOV, AVI, MKV &middot; Up to 500MB
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Divider */}
+          <div className="flex items-center gap-4 my-6">
+            <div className="flex-1 h-px bg-white/10" />
+            <span className="text-xs text-gray-500 font-medium uppercase tracking-wider">or paste PGN directly</span>
+            <div className="flex-1 h-px bg-white/10" />
+          </div>
+
+          {/* === OPTION 2: Paste PGN === */}
+          <div className="space-y-3">
+            <textarea
+              value={pgnInput}
+              onChange={(e) => setPgnInput(e.target.value)}
+              placeholder={`Paste PGN notation here...\n\nExample:\n1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 4. Ba4 Nf6 5. O-O Be7...`}
+              className="w-full h-36 bg-white/5 border border-white/10 rounded-xl p-4 text-gray-200 placeholder-gray-500 focus:border-accent focus:outline-none resize-none font-mono text-sm"
+            />
+            <button
+              onClick={handlePgnSubmit}
+              disabled={!pgnInput.trim()}
+              className="w-full py-3 px-6 bg-white/10 hover:bg-white/15 text-white font-semibold rounded-xl transition-all disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-2 border border-white/10"
+            >
+              <Sparkles className="w-4 h-4" />
+              Analyze PGN
+            </button>
+          </div>
+        </>
       )}
 
       {store.status === 'error' && (
@@ -478,10 +453,7 @@ export default function VideoUpload({ onAnalysisComplete }: VideoUploadProps) {
           ].map((game) => (
             <button
               key={game.name}
-              onClick={() => {
-                setPgnInput(game.pgn);
-                setMode('pgn');
-              }}
+              onClick={() => setPgnInput(game.pgn)}
               className="text-left p-3 bg-white/5 rounded-lg hover:bg-white/10 transition-colors text-sm text-gray-300 hover:text-white"
             >
               {game.name}

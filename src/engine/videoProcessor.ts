@@ -31,9 +31,9 @@ const SAMPLE_GAMES_BY_LENGTH: Array<{
   },
   // Short games (8-15 moves)
   {
-    name: 'Fried Liver Attack Miniature',
-    pgn: '1. e4 e5 2. Nf3 Nc6 3. Bc4 Nf6 4. Ng5 d5 5. exd5 Nxd5 6. Nxf7 Kxf7 7. Qf3+ Ke6 8. Nc3 Nb4 9. O-O c6 10. d4 Kd7 11. Qf7+ Be7 12. Be6+ Kd6 13. Bf4#',
-    moveCount: 13,
+    name: 'Traxler Counter Attack',
+    pgn: '1. e4 e5 2. Nf3 Nc6 3. Bc4 Nf6 4. Ng5 Bc5 5. Nxf7 Bxf2+ 6. Kf1 Qe7 7. Nxh8 d5 8. exd5 Nd4 9. d6 Qxd6 10. c3 Bg4 11. Qa4+ Nd7',
+    moveCount: 11,
   },
   {
     name: 'Opera Game (Morphy vs Duke of Brunswick, 1858)',
