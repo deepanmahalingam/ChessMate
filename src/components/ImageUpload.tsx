@@ -3,12 +3,13 @@ import { useDropzone } from 'react-dropzone';
 import { Chessboard } from 'react-chessboard';
 import {
   ImageIcon, Upload, X, Sparkles, AlertCircle,
-  Edit3, Check, RotateCcw, Info, Trash2, Plus,
+  Edit3, Check, RotateCcw, Info, Trash2, Plus, Grid3x3,
 } from 'lucide-react';
 import { processImages, type DetectedPosition, type ImageProcessingResult } from '../engine/imageProcessor';
 import { useGameStore } from '../store/gameStore';
 import { analyzeGame } from '../engine/analyzer';
 import { Chess } from 'chess.js';
+import BoardEditor from './BoardEditor';
 
 interface ImageUploadProps {
   onAnalysisComplete: () => void;
@@ -30,6 +31,7 @@ export default function ImageUpload({ onAnalysisComplete }: ImageUploadProps) {
   const [progressMsg, setProgressMsg] = useState('');
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState('');
+  const [boardEditorIndex, setBoardEditorIndex] = useState<number | null>(null);
 
   // Handle image files dropped/selected
   const onDrop = useCallback((acceptedFiles: File[]) => {
@@ -360,14 +362,23 @@ export default function ImageUpload({ onAnalysisComplete }: ImageUploadProps) {
                     </div>
                   </div>
                 ) : (
-                  <div className="flex items-center gap-2">
-                    <p className="flex-1 font-mono text-[9px] text-gray-500 truncate">{pos.fen}</p>
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <p className="flex-1 font-mono text-[9px] text-gray-500 truncate">{pos.fen}</p>
+                      <button
+                        onClick={() => startEditPosition(i)}
+                        className="shrink-0 p-1 text-gray-500 hover:text-purple-400 transition-colors"
+                        title="Edit FEN"
+                      >
+                        <Edit3 className="w-3 h-3" />
+                      </button>
+                    </div>
                     <button
-                      onClick={() => startEditPosition(i)}
-                      className="shrink-0 p-1 text-gray-500 hover:text-purple-400 transition-colors"
-                      title="Edit FEN"
+                      onClick={() => setBoardEditorIndex(i)}
+                      className="w-full flex items-center justify-center gap-1.5 px-2 py-1.5 bg-purple-500/10 text-purple-400 rounded-lg text-[11px] font-medium hover:bg-purple-500/20 transition-colors"
                     >
-                      <Edit3 className="w-3 h-3" />
+                      <Grid3x3 className="w-3 h-3" />
+                      Edit on Board
                     </button>
                   </div>
                 )}
@@ -430,6 +441,25 @@ export default function ImageUpload({ onAnalysisComplete }: ImageUploadProps) {
           <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-xl flex items-start gap-3">
             <AlertCircle className="w-4 h-4 text-red-400 mt-0.5 shrink-0" />
             <p className="text-xs text-red-300/80">{error}</p>
+          </div>
+        )}
+
+        {/* Board Editor Modal */}
+        {boardEditorIndex !== null && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+            <div className="max-w-md w-full max-h-[90vh] overflow-y-auto">
+              <BoardEditor
+                initialFen={editedPositions[boardEditorIndex].fen}
+                onFenChange={(newFen) => {
+                  setEditedPositions(prev => {
+                    const next = [...prev];
+                    next[boardEditorIndex] = { ...next[boardEditorIndex], fen: newFen, confidence: 1.0 };
+                    return next;
+                  });
+                }}
+                onClose={() => setBoardEditorIndex(null)}
+              />
+            </div>
           </div>
         )}
 
