@@ -32,6 +32,7 @@ export default function ImageUpload({ onAnalysisComplete }: ImageUploadProps) {
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState('');
   const [boardEditorIndex, setBoardEditorIndex] = useState<number | null>(null);
+  const [boardEditorKey, setBoardEditorKey] = useState(0);
 
   // Handle image files dropped/selected
   const onDrop = useCallback((acceptedFiles: File[]) => {
@@ -301,54 +302,134 @@ export default function ImageUpload({ onAnalysisComplete }: ImageUploadProps) {
           <div className="text-xs text-purple-300/80">
             {isSingle ? (
               <>
-                <span className="font-semibold text-purple-300">How to use:</span> Compare your uploaded image (left) with the board editor (right).
-                Click a piece from the palette, then click squares to place it. Use <strong>Reset</strong> to start from the standard position.
-                {editedPositions[0].matchedPositionName && (
-                  <> Best guess: <strong>{editedPositions[0].matchedPositionName}</strong>.</>
-                )}
+                <span className="font-semibold text-purple-300">How to use:</span> Look at your uploaded image and recreate the position using the board editor below.
+                Select a piece from the palette, then tap squares to place it. Or paste a FEN from Lichess / Chess.com.
               </>
             ) : (
               <>
-                <span className="font-semibold text-purple-300">Image Recognition:</span> Positions are best-guess estimates.
-                Use the &ldquo;Edit on Board&rdquo; button on each card to correct any errors with the visual editor.
+                <span className="font-semibold text-purple-300">Multiple images:</span> Set up each position using the board editor.
+                Use the &ldquo;Edit on Board&rdquo; button on each card.
               </>
             )}
           </div>
         </div>
 
-        {/* Single image: side-by-side layout with image + board editor */}
+        {/* Single image: image preview + quick tools + board editor */}
         {isSingle && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {/* Left: uploaded image */}
+          <div className="space-y-4">
+            {/* Image preview (collapsible/compact) */}
             <div className="bg-white/5 rounded-xl border border-white/10 overflow-hidden">
-              <div className="p-3 border-b border-white/10">
-                <h3 className="text-sm font-semibold text-gray-300">Your Image</h3>
-                <p className="text-[10px] text-gray-500">{editedPositions[0].fileName}</p>
+              <div className="p-3 border-b border-white/10 flex items-center justify-between">
+                <div>
+                  <h3 className="text-sm font-semibold text-gray-300">Your Image</h3>
+                  <p className="text-[10px] text-gray-500">{editedPositions[0].fileName}</p>
+                </div>
               </div>
               <div className="p-3">
                 <img
                   src={editedPositions[0].imageUrl}
                   alt={editedPositions[0].fileName}
-                  className="w-full rounded-lg object-contain max-h-[500px]"
+                  className="w-full rounded-lg object-contain max-h-[350px]"
                 />
               </div>
             </div>
 
-            {/* Right: board editor inline */}
-            <div>
-              <BoardEditor
-                initialFen={editedPositions[0].fen}
-                onFenChange={(newFen) => {
-                  setEditedPositions(prev => {
-                    const next = [...prev];
-                    next[0] = { ...next[0], fen: newFen, confidence: 1.0 };
-                    return next;
-                  });
-                }}
-                onClose={() => {/* no-op for inline mode */}}
-                inlineMode={true}
-              />
+            {/* Quick Paste FEN */}
+            <div className="bg-white/5 rounded-xl border border-white/10 p-3">
+              <h3 className="text-sm font-semibold text-gray-300 mb-2">Quick Setup: Paste FEN</h3>
+              <p className="text-[10px] text-gray-500 mb-2">
+                Copy a FEN from Lichess, Chess.com, or any chess tool and paste it here
+              </p>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="Paste FEN here, e.g. rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1"
+                  className="flex-1 bg-black/30 border border-purple-500/30 rounded-lg px-3 py-2 text-gray-200 font-mono text-xs focus:border-purple-500 focus:outline-none placeholder-gray-600"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      const val = (e.target as HTMLInputElement).value.trim();
+                      if (val) {
+                        try {
+                          new Chess(val);
+                          setEditedPositions(prev => {
+                            const next = [...prev];
+                            next[0] = { ...next[0], fen: val, confidence: 1.0 };
+                            return next;
+                          });
+                          setError('');
+                          // Force remount board editor by toggling a key
+                          setBoardEditorKey(k => k + 1);
+                        } catch {
+                          setError('Invalid FEN. Please check the notation and try again.');
+                        }
+                      }
+                    }
+                  }}
+                  onChange={(e) => {
+                    const val = e.target.value.trim();
+                    if (val && val.includes('/') && val.split('/').length >= 8) {
+                      try {
+                        new Chess(val);
+                        setEditedPositions(prev => {
+                          const next = [...prev];
+                          next[0] = { ...next[0], fen: val, confidence: 1.0 };
+                          return next;
+                        });
+                        setError('');
+                        setBoardEditorKey(k => k + 1);
+                      } catch {
+                        // Not valid yet, user still typing
+                      }
+                    }
+                  }}
+                />
+              </div>
             </div>
+
+            {/* Preset Positions */}
+            <div className="bg-white/5 rounded-xl border border-white/10 p-3">
+              <h3 className="text-sm font-semibold text-gray-300 mb-2">Or Select a Preset Position</h3>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {[
+                  { name: 'Starting Position', fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1' },
+                  { name: 'After 1.e4', fen: 'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1' },
+                  { name: 'After 1.d4', fen: 'rnbqkbnr/pppppppp/8/8/3P4/8/PPP1PPPP/RNBQKBNR b KQkq - 0 1' },
+                  { name: 'Italian Game', fen: 'r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R b KQkq - 3 3' },
+                  { name: 'Sicilian Defense', fen: 'rnbqkbnr/pp1ppppp/8/2p5/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2' },
+                  { name: 'Empty Board', fen: '8/8/8/8/8/8/8/8 w - - 0 1' },
+                ].map(preset => (
+                  <button
+                    key={preset.name}
+                    onClick={() => {
+                      setEditedPositions(prev => {
+                        const next = [...prev];
+                        next[0] = { ...next[0], fen: preset.fen, confidence: 1.0 };
+                        return next;
+                      });
+                      setBoardEditorKey(k => k + 1);
+                    }}
+                    className="px-3 py-2 bg-white/5 hover:bg-purple-500/15 border border-white/10 hover:border-purple-500/30 rounded-lg text-xs text-gray-300 hover:text-purple-300 transition-all text-left"
+                  >
+                    {preset.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Board editor */}
+            <BoardEditor
+              key={boardEditorKey}
+              initialFen={editedPositions[0].fen}
+              onFenChange={(newFen) => {
+                setEditedPositions(prev => {
+                  const next = [...prev];
+                  next[0] = { ...next[0], fen: newFen, confidence: 1.0 };
+                  return next;
+                });
+              }}
+              onClose={() => {/* no-op for inline mode */}}
+              inlineMode={true}
+            />
           </div>
         )}
 
