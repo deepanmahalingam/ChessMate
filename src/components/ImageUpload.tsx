@@ -274,166 +274,203 @@ export default function ImageUpload({ onAnalysisComplete }: ImageUploadProps) {
 
   // ─── REVIEW STATE ──────────────────────────────────────
   if (phase === 'review' && result) {
+    // For single image: show image + board editor side by side
+    // For multiple images: show cards grid with edit buttons
+    const isSingle = editedPositions.length === 1;
+
     return (
-      <div className="max-w-4xl mx-auto space-y-4">
+      <div className="max-w-5xl mx-auto space-y-4">
         {/* Header */}
         <div className="text-center">
           <div className="w-12 h-12 mx-auto rounded-full bg-purple-500/20 flex items-center justify-center mb-3">
-            <ImageIcon className="w-6 h-6 text-purple-400" />
+            <Grid3x3 className="w-6 h-6 text-purple-400" />
           </div>
-          <h2 className="text-xl font-bold text-white">Detected Positions</h2>
+          <h2 className="text-xl font-bold text-white">
+            {isSingle ? 'Set Up Position' : 'Review Detected Positions'}
+          </h2>
           <p className="text-sm text-gray-400 mt-1">
-            {editedPositions.length} image{editedPositions.length > 1 ? 's' : ''} analyzed. Review and edit detected positions below.
+            {isSingle
+              ? 'Match the board editor to your uploaded image, then analyze.'
+              : `${editedPositions.length} images analyzed. Edit positions as needed.`}
           </p>
         </div>
 
-        {/* Demo mode banner */}
-        {result.isDemoMode && (
-          <div className="p-3 bg-purple-500/10 border border-purple-500/30 rounded-xl flex items-start gap-3">
-            <Info className="w-4 h-4 text-purple-400 mt-0.5 shrink-0" />
-            <div className="text-xs text-purple-300/80">
-              <span className="font-semibold text-purple-300">Image Recognition:</span> The board detection uses canvas-based pixel analysis.
-              For best results, upload clear, well-lit images of a chessboard from directly above.
-              You can manually edit any detected FEN or the reconstructed PGN.
-            </div>
-          </div>
-        )}
-
-        {/* Position Cards Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {editedPositions.map((pos, i) => (
-            <div key={i} className="bg-white/5 rounded-xl border border-white/10 overflow-hidden">
-              {/* Image preview */}
-              <div className="relative">
-                <img
-                  src={pos.imageUrl}
-                  alt={pos.fileName}
-                  className="w-full h-32 object-cover"
-                />
-                <div className="absolute top-2 left-2 bg-black/70 text-white text-[10px] px-2 py-0.5 rounded-full font-mono">
-                  #{i + 1}
-                </div>
-                <div className={`absolute top-2 right-2 text-[10px] px-2 py-0.5 rounded-full font-medium ${
-                  pos.confidence > 0.7 ? 'bg-green-500/20 text-green-400' :
-                  pos.confidence > 0.4 ? 'bg-yellow-500/20 text-yellow-400' :
-                  'bg-red-500/20 text-red-400'
-                }`}>
-                  {pos.boardFound ? `${(pos.confidence * 100).toFixed(0)}% conf` : 'Board not found'}
-                </div>
-              </div>
-
-              {/* Detected board preview */}
-              <div className="p-3">
-                <div className="w-full max-w-[200px] mx-auto mb-2">
-                  <Chessboard
-                    options={{
-                      position: pos.fen,
-                      boardStyle: { borderRadius: '4px' },
-                      darkSquareStyle: { backgroundColor: '#b58863' },
-                      lightSquareStyle: { backgroundColor: '#f0d9b5' },
-                      allowDragging: false,
-                    }}
-                  />
-                </div>
-
-                {/* FEN display */}
-                {editingIndex === i ? (
-                  <div className="space-y-2">
-                    <input
-                      type="text"
-                      value={editFen}
-                      onChange={(e) => setEditFen(e.target.value)}
-                      className="w-full bg-black/30 border border-purple-500/30 rounded-lg px-3 py-1.5 text-gray-200 font-mono text-[10px] focus:border-purple-500 focus:outline-none"
-                      placeholder="Enter FEN..."
-                    />
-                    <div className="flex gap-2">
-                      <button
-                        onClick={saveEditPosition}
-                        className="flex-1 flex items-center justify-center gap-1 px-2 py-1 bg-purple-500/20 text-purple-400 rounded-lg text-xs hover:bg-purple-500/30"
-                      >
-                        <Check className="w-3 h-3" /> Save
-                      </button>
-                      <button
-                        onClick={() => { setEditingIndex(null); setEditFen(''); }}
-                        className="flex items-center justify-center gap-1 px-2 py-1 bg-white/5 text-gray-400 rounded-lg text-xs hover:bg-white/10"
-                      >
-                        <X className="w-3 h-3" /> Cancel
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <p className="flex-1 font-mono text-[9px] text-gray-500 truncate">{pos.fen}</p>
-                      <button
-                        onClick={() => startEditPosition(i)}
-                        className="shrink-0 p-1 text-gray-500 hover:text-purple-400 transition-colors"
-                        title="Edit FEN"
-                      >
-                        <Edit3 className="w-3 h-3" />
-                      </button>
-                    </div>
-                    <button
-                      onClick={() => setBoardEditorIndex(i)}
-                      className="w-full flex items-center justify-center gap-1.5 px-2 py-1.5 bg-purple-500/10 text-purple-400 rounded-lg text-[11px] font-medium hover:bg-purple-500/20 transition-colors"
-                    >
-                      <Grid3x3 className="w-3 h-3" />
-                      Edit on Board
-                    </button>
-                  </div>
+        {/* Info banner */}
+        <div className="p-3 bg-purple-500/10 border border-purple-500/30 rounded-xl flex items-start gap-3">
+          <Info className="w-4 h-4 text-purple-400 mt-0.5 shrink-0" />
+          <div className="text-xs text-purple-300/80">
+            {isSingle ? (
+              <>
+                <span className="font-semibold text-purple-300">How to use:</span> Compare your uploaded image (left) with the board editor (right).
+                Click a piece from the palette, then click squares to place it. Use <strong>Reset</strong> to start from the standard position.
+                {editedPositions[0].matchedPositionName && (
+                  <> Best guess: <strong>{editedPositions[0].matchedPositionName}</strong>.</>
                 )}
-
-                <p className="text-[10px] text-gray-600 mt-1 truncate">{pos.fileName}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* Reconstructed PGN */}
-        {editedPositions.length > 1 && (
-          <div className="bg-white/5 rounded-xl border border-white/10 p-4">
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="text-sm font-semibold text-gray-300">
-                {isEditingPgn ? 'Edit Reconstructed PGN' : 'Reconstructed PGN'}
-              </h3>
-              <button
-                onClick={() => setIsEditingPgn(!isEditingPgn)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                  isEditingPgn
-                    ? 'bg-purple-500/20 text-purple-400'
-                    : 'bg-white/5 text-gray-400 hover:text-white hover:bg-white/10'
-                }`}
-              >
-                <Edit3 className="w-3 h-3" />
-                {isEditingPgn ? 'Editing' : 'Edit PGN'}
-              </button>
-            </div>
-            {isEditingPgn ? (
-              <textarea
-                value={editedPgn}
-                onChange={(e) => setEditedPgn(e.target.value)}
-                className="w-full h-24 bg-black/30 border border-purple-500/30 rounded-lg p-3 text-gray-200 font-mono text-sm focus:border-purple-500 focus:outline-none resize-none"
-                placeholder="Enter PGN moves here..."
-              />
+              </>
             ) : (
-              <div className="bg-black/20 rounded-lg p-3 font-mono text-sm text-gray-300 leading-relaxed min-h-[3rem]">
-                {editedPgn || <span className="text-gray-500 italic">No moves reconstructed yet — edit to add PGN manually</span>}
-              </div>
+              <>
+                <span className="font-semibold text-purple-300">Image Recognition:</span> Positions are best-guess estimates.
+                Use the &ldquo;Edit on Board&rdquo; button on each card to correct any errors with the visual editor.
+              </>
             )}
           </div>
+        </div>
+
+        {/* Single image: side-by-side layout with image + board editor */}
+        {isSingle && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {/* Left: uploaded image */}
+            <div className="bg-white/5 rounded-xl border border-white/10 overflow-hidden">
+              <div className="p-3 border-b border-white/10">
+                <h3 className="text-sm font-semibold text-gray-300">Your Image</h3>
+                <p className="text-[10px] text-gray-500">{editedPositions[0].fileName}</p>
+              </div>
+              <div className="p-3">
+                <img
+                  src={editedPositions[0].imageUrl}
+                  alt={editedPositions[0].fileName}
+                  className="w-full rounded-lg object-contain max-h-[500px]"
+                />
+              </div>
+            </div>
+
+            {/* Right: board editor inline */}
+            <div>
+              <BoardEditor
+                initialFen={editedPositions[0].fen}
+                onFenChange={(newFen) => {
+                  setEditedPositions(prev => {
+                    const next = [...prev];
+                    next[0] = { ...next[0], fen: newFen, confidence: 1.0 };
+                    return next;
+                  });
+                }}
+                onClose={() => {/* no-op for inline mode */}}
+                inlineMode={true}
+              />
+            </div>
+          </div>
         )}
 
-        {/* Single image — show position FEN */}
-        {editedPositions.length === 1 && (
-          <div className="bg-white/5 rounded-xl border border-white/10 p-4">
-            <h3 className="text-sm font-semibold text-gray-300 mb-2">Detected Position (FEN)</h3>
-            <div className="bg-black/20 rounded-lg p-3 font-mono text-xs text-gray-300 leading-relaxed break-all">
-              {editedPositions[0].fen}
+        {/* Multiple images: cards grid */}
+        {!isSingle && (
+          <>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {editedPositions.map((pos, i) => (
+                <div key={i} className="bg-white/5 rounded-xl border border-white/10 overflow-hidden">
+                  <div className="relative">
+                    <img
+                      src={pos.imageUrl}
+                      alt={pos.fileName}
+                      className="w-full h-32 object-cover"
+                    />
+                    <div className="absolute top-2 left-2 bg-black/70 text-white text-[10px] px-2 py-0.5 rounded-full font-mono">
+                      #{i + 1}
+                    </div>
+                    {pos.matchedPositionName && (
+                      <div className="absolute bottom-2 left-2 bg-black/70 text-purple-300 text-[10px] px-2 py-0.5 rounded-full">
+                        {pos.matchedPositionName}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="p-3">
+                    <div className="w-full max-w-[200px] mx-auto mb-2">
+                      <Chessboard
+                        options={{
+                          position: pos.fen,
+                          boardStyle: { borderRadius: '4px' },
+                          darkSquareStyle: { backgroundColor: '#b58863' },
+                          lightSquareStyle: { backgroundColor: '#f0d9b5' },
+                          allowDragging: false,
+                        }}
+                      />
+                    </div>
+
+                    {editingIndex === i ? (
+                      <div className="space-y-2">
+                        <input
+                          type="text"
+                          value={editFen}
+                          onChange={(e) => setEditFen(e.target.value)}
+                          className="w-full bg-black/30 border border-purple-500/30 rounded-lg px-3 py-1.5 text-gray-200 font-mono text-[10px] focus:border-purple-500 focus:outline-none"
+                          placeholder="Enter FEN..."
+                        />
+                        <div className="flex gap-2">
+                          <button
+                            onClick={saveEditPosition}
+                            className="flex-1 flex items-center justify-center gap-1 px-2 py-1 bg-purple-500/20 text-purple-400 rounded-lg text-xs hover:bg-purple-500/30"
+                          >
+                            <Check className="w-3 h-3" /> Save
+                          </button>
+                          <button
+                            onClick={() => { setEditingIndex(null); setEditFen(''); }}
+                            className="flex items-center justify-center gap-1 px-2 py-1 bg-white/5 text-gray-400 rounded-lg text-xs hover:bg-white/10"
+                          >
+                            <X className="w-3 h-3" /> Cancel
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <p className="flex-1 font-mono text-[9px] text-gray-500 truncate">{pos.fen}</p>
+                          <button
+                            onClick={() => startEditPosition(i)}
+                            className="shrink-0 p-1 text-gray-500 hover:text-purple-400 transition-colors"
+                            title="Edit FEN"
+                          >
+                            <Edit3 className="w-3 h-3" />
+                          </button>
+                        </div>
+                        <button
+                          onClick={() => setBoardEditorIndex(i)}
+                          className="w-full flex items-center justify-center gap-1.5 px-2 py-1.5 bg-purple-500/10 text-purple-400 rounded-lg text-[11px] font-medium hover:bg-purple-500/20 transition-colors"
+                        >
+                          <Grid3x3 className="w-3 h-3" />
+                          Edit on Board
+                        </button>
+                      </div>
+                    )}
+
+                    <p className="text-[10px] text-gray-600 mt-1 truncate">{pos.fileName}</p>
+                  </div>
+                </div>
+              ))}
             </div>
-            <p className="text-[10px] text-gray-500 mt-2">
-              The engine will analyze possible continuations from this position.
-            </p>
-          </div>
+
+            {/* Reconstructed PGN */}
+            <div className="bg-white/5 rounded-xl border border-white/10 p-4">
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-sm font-semibold text-gray-300">
+                  {isEditingPgn ? 'Edit Reconstructed PGN' : 'Reconstructed PGN'}
+                </h3>
+                <button
+                  onClick={() => setIsEditingPgn(!isEditingPgn)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                    isEditingPgn
+                      ? 'bg-purple-500/20 text-purple-400'
+                      : 'bg-white/5 text-gray-400 hover:text-white hover:bg-white/10'
+                  }`}
+                >
+                  <Edit3 className="w-3 h-3" />
+                  {isEditingPgn ? 'Editing' : 'Edit PGN'}
+                </button>
+              </div>
+              {isEditingPgn ? (
+                <textarea
+                  value={editedPgn}
+                  onChange={(e) => setEditedPgn(e.target.value)}
+                  className="w-full h-24 bg-black/30 border border-purple-500/30 rounded-lg p-3 text-gray-200 font-mono text-sm focus:border-purple-500 focus:outline-none resize-none"
+                  placeholder="Enter PGN moves here..."
+                />
+              ) : (
+                <div className="bg-black/20 rounded-lg p-3 font-mono text-sm text-gray-300 leading-relaxed min-h-[3rem]">
+                  {editedPgn || <span className="text-gray-500 italic">No moves reconstructed — edit to add PGN manually</span>}
+                </div>
+              )}
+            </div>
+          </>
         )}
 
         {/* Error */}
@@ -444,7 +481,7 @@ export default function ImageUpload({ onAnalysisComplete }: ImageUploadProps) {
           </div>
         )}
 
-        {/* Board Editor Modal */}
+        {/* Board Editor Modal (for multi-image mode) */}
         {boardEditorIndex !== null && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
             <div className="max-w-md w-full max-h-[90vh] overflow-y-auto">
@@ -477,7 +514,7 @@ export default function ImageUpload({ onAnalysisComplete }: ImageUploadProps) {
             className="flex-1 flex items-center justify-center gap-2 py-3 px-6 bg-gradient-to-r from-purple-500 to-pink-500 text-white font-semibold rounded-xl hover:opacity-90 transition-opacity"
           >
             <Sparkles className="w-4 h-4" />
-            Analyze {editedPositions.length > 1 ? 'Game' : 'Position'}
+            Analyze {isSingle ? 'Position' : 'Game'}
           </button>
         </div>
       </div>

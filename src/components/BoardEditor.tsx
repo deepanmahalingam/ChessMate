@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { Chess } from 'chess.js';
 import {
   RotateCcw, Trash2, Copy, Check,
@@ -8,6 +8,7 @@ interface BoardEditorProps {
   initialFen: string;
   onFenChange: (fen: string) => void;
   onClose: () => void;
+  inlineMode?: boolean; // When true, auto-saves on every change, hides Cancel/Apply buttons
 }
 
 type PieceType = 'K' | 'Q' | 'R' | 'B' | 'N' | 'P' | 'k' | 'q' | 'r' | 'b' | 'n' | 'p';
@@ -20,7 +21,7 @@ const PIECE_SYMBOLS: Record<string, string> = {
 const FILES = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
 const RANKS = ['8', '7', '6', '5', '4', '3', '2', '1'];
 
-export default function BoardEditor({ initialFen, onFenChange, onClose }: BoardEditorProps) {
+export default function BoardEditor({ initialFen, onFenChange, onClose, inlineMode = false }: BoardEditorProps) {
   const [board, setBoard] = useState<(PieceType | null)[][]>(() => parseFenToBoard(initialFen));
   const [selectedPiece, setSelectedPiece] = useState<PieceType | null>(null);
   const [eraseMode, setEraseMode] = useState(false);
@@ -138,6 +139,27 @@ export default function BoardEditor({ initialFen, onFenChange, onClose }: BoardE
   };
 
   const currentFen = boardToFen(board);
+
+  // In inline mode, auto-save FEN changes back to parent
+  useEffect(() => {
+    if (inlineMode) {
+      // Validate and send
+      try {
+        new Chess(currentFen);
+        onFenChange(currentFen);
+      } catch {
+        // Try without castling
+        const simpleFen = currentFen.replace(/[KQkq]+(?= )/, '-');
+        try {
+          new Chess(simpleFen);
+          onFenChange(simpleFen);
+        } catch {
+          // Invalid position, don't update
+        }
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentFen, inlineMode]);
 
   return (
     <div className="bg-gray-900/95 backdrop-blur-sm rounded-2xl border border-white/10 p-4 space-y-4">
@@ -293,21 +315,23 @@ export default function BoardEditor({ initialFen, onFenChange, onClose }: BoardE
         </button>
       </div>
 
-      {/* Action buttons */}
-      <div className="flex gap-2">
-        <button
-          onClick={onClose}
-          className="flex-1 py-2.5 px-4 bg-white/5 rounded-xl text-sm text-gray-400 hover:bg-white/10 transition-colors"
-        >
-          Cancel
-        </button>
-        <button
-          onClick={handleSave}
-          className="flex-1 py-2.5 px-4 bg-gradient-to-r from-purple-500 to-pink-500 rounded-xl text-sm text-white font-semibold hover:opacity-90 transition-opacity"
-        >
-          Apply Position
-        </button>
-      </div>
+      {/* Action buttons (hidden in inline mode) */}
+      {!inlineMode && (
+        <div className="flex gap-2">
+          <button
+            onClick={onClose}
+            className="flex-1 py-2.5 px-4 bg-white/5 rounded-xl text-sm text-gray-400 hover:bg-white/10 transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSave}
+            className="flex-1 py-2.5 px-4 bg-gradient-to-r from-purple-500 to-pink-500 rounded-xl text-sm text-white font-semibold hover:opacity-90 transition-opacity"
+          >
+            Apply Position
+          </button>
+        </div>
+      )}
     </div>
   );
 }
