@@ -411,7 +411,7 @@ export default function VideoUpload({ onAnalysisComplete }: VideoUploadProps) {
             <div className="flex-1 h-px bg-white/10" />
           </div>
 
-          {/* === OPTION 2: Paste PGN === */}
+          {/* === OPTION 2: Paste PGN (Video Upload also supports this) === */}
           <div className="space-y-3">
             <textarea
               value={pgnInput}
